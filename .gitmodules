@@ -1,0 +1,3 @@
+[submodule "git-pandas"]
+	path = git-pandas
+	url = https://github.com/vifactor/git-pandas.git
