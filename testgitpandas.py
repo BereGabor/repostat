@@ -16,9 +16,9 @@ class TestGitPandasMethods(unittest.TestCase):
     def setUpClass(cls):
         cls.repostat_repo_dir = os.path.dirname(os.path.abspath(__file__))
 
-    @staticmethod
     @Timeit("Fetching history using subprocess call")
-    def git_subprocess_history_fetch():
+    def git_subprocess_history_fetch(self):
+        os.chdir(self.repostat_repo_dir)
         return get_total_changes_timeline()
 
     @Timeit("Fetching history using pygit2 lib")
