@@ -321,18 +321,81 @@ class GitStatistics:
         return activity
 
     @staticmethod
-    def build_history_item(child_commit, stat) -> dict:
-        return {
+    def _get_delta_status(status_code: int) -> str:
+        # GIT_DELTA_ADDED = 1
+        # GIT_DELTA_COPIED = 5
+        # GIT_DELTA_DELETED = 2
+        # GIT_DELTA_IGNORED = 6
+        # GIT_DELTA_MODIFIED = 3
+        # GIT_DELTA_RENAMED = 4
+        # GIT_DELTA_TYPECHANGE = 8
+        # GIT_DELTA_UNMODIFIED = 0
+        # GIT_DELTA_UNREADABLE = 9
+        # GIT_DELTA_UNTRACKED = 7
+
+        if status_code == 1:
+            return "ADDED"
+        elif status_code == 5:
+            return "COPIED"
+        elif status_code == 2:
+            return "DELETED"
+        elif status_code == 6:
+            return "IGNORED"
+        elif status_code == 3:
+            return "MODIFIED"
+        elif status_code == 4:
+            return "RENAMED"
+        elif status_code == 8:
+            return "TYPECHANGED"
+        elif status_code == 0:
+            return "UNMODIFIED"
+        elif status_code == 9:
+            return "UNREADABLE"
+        elif status_code == 7:
+            return "UNTRACKED"
+
+    def _get_files_info_from_commit(self, diff: git.Diff) -> list:
+        result = []
+
+        for p in diff:
+            item = {
+                "file_path": os.path.dirname(p.delta.new_file.path),
+                "file_name": os.path.basename(p.delta.new_file.path),
+                "file_ext": "" if os.path.basename(p.delta.new_file.path).startswith(".") else
+                os.path.splitext(p.delta.new_file.path)[1],
+                "oid": p.delta.new_file.id,
+                "size": p.delta.new_file.size,
+                "size_change": p.delta.new_file.size - p.delta.old_file.size,
+                "status_code": p.delta.status,
+                "status": self._get_delta_status(p.delta.status)
+            }
+            result.append(item)
+
+        return result
+
+    def build_history_item(self, commit) -> dict:
+        diff = None
+        if len(commit.parents) >= 1:
+            # taking [0]-parent is equivalent of '--first-parent -m' options
+            diff = commit.tree.diff_to_tree(commit.parents[0].tree)
+        elif len(commit.parents) == 0:
+            # initial commit does not have parent, so we take diff to empty tree
+            diff = commit.tree.diff_to_tree(swap=True)
+
+        stat = diff.stats
+        result = {
             'files': stat.files_changed,
             'ins': stat.insertions,
             'del': stat.deletions,
-            'author': child_commit.author.name,
-            'author_mail': child_commit.author.email,
-            'is_merge': len(child_commit.parents) > 1,
-            'commit_time': child_commit.commit_time,
-            'oid': child_commit.oid,
-            'parent_ids': child_commit.parent_ids
+            'author': commit.author.name,
+            'author_mail': commit.author.email,
+            'is_merge': len(commit.parents) > 1,
+            'commit_time': commit.commit_time,
+            'oid': commit.oid,
+            'parent_ids': commit.parent_ids,
+            'file_list': [] if len(commit.parents) > 1 else self._get_files_info_from_commit(diff)
         }
+        return result
 
     @Timeit("Fetching total history")
     def fetch_total_history(self):
@@ -340,15 +403,12 @@ class GitStatistics:
         child_commit = self.repo.head.peel()
         timestamps = []
         while len(child_commit.parents) != 0:
-            # taking [0]-parent is equivalent of '--first-parent -m' options
             parent_commit = child_commit.parents[0]
-            st = self.repo.diff(parent_commit, child_commit).stats
-            history[child_commit.author.time] = self.build_history_item(child_commit, st)
+            history[child_commit.author.time] = self.build_history_item(child_commit)
             timestamps.append(child_commit.author.time)
             child_commit = parent_commit
         # initial commit does not have parent, so we take diff to empty tree
-        st = child_commit.tree.diff_to_tree(swap=True).stats
-        history[child_commit.author.time] = self.build_history_item(child_commit, st)
+        history[child_commit.author.time] = self.build_history_item(child_commit)
 
         timestamps.append(child_commit.author.time)
 
