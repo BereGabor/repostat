@@ -1,7 +1,7 @@
 import unittest
 import datetime
-from tools.gitstatistics import CommitDictFactory
-from tools.gitstatistics import AuthorDictFactory
+from analysis.gitstatistics import CommitDictFactory
+from analysis.gitstatistics import AuthorDictFactory
 
 
 class TestCommitDictFactory(unittest.TestCase):

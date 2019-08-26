@@ -6,95 +6,65 @@ Modernized forked [gitstats](https://github.com/hoxu/gitstats) tool:
  - git output text parsing replaced with pygit2 library calls 
  - added "About" page
 
-# Install
-### Local version can be installed running
+# Ubuntu installation
+## Using pip
 ```bash
-sudo python3 setup.py install [--record files.txt]
+sudo pip3 install [-e] https://github.com/vifactor/repostat
 ```
+This installation procedure may require manual installation 
+of required dependencies, e.g. libgit2, gnuplot. But should also
+work in other non-Debian Linux distributions.
 
-### Local develop version can be uninstalled running
+## Using ppa
 ```bash
-sudo cat files.txt | sudo xargs rm -rf
+sudo add-apt-repository ppa:vifactor/ppa
+sudo apt update
+sudo apt install repostat
 ```
-if previously option "--record files.txt" was used at previous installation.
+**Currently only Ubuntu 18.04 is supported**
+
+# Windows installation
+Check issue #57
 
 ___
-## gitstats Usage
-**Sample:**
+# Scripts
+## repostat
+**Usage**
 ```bash
-python3 gitstats --output_format=[csv,html] --project_name=ProjectNameSample [git-repo-folder] [output-folder]
+repostat [--help] [--project_name PROJECT_NAME]
+                 [--output_format {html,csv}] [--append_csv] [--version]
+                 [--config_file CONFIG_FILE]
+                 git_repository_path output_path
 ```
+See "--help" for details.
 
+## export_repos
+The tool script to export statistics of well structured git repos.
+Required folder structure:
+* root_folder
+  * folder1 
+    * GitRepo_1
+    * ...  
+    * GitRepo_n
+  * ...
 
-### Args
-#### output_format
-**valid values**: csv, html  
-**csv**: export basics repo statistic to csv files:  
-    - activity_month_of_year.csv : monthly statistic  
-    - commits.csv : all commit info. Merge commit ignored  
-    - authors.csv : statistic about authors  
-    - general.csv : main statistic info about rep  
-      
-CSV export useful for import into any RDBMS and made any custom statistics.  
-All CSV export files has "Project Name" and "Repo Name" columns.  
-After csv imported any RDBMS can use this field for higher dimension of analysis.
+Expected output:
+* root_folder  
+  * folder1  
+    * GitRepo_1
+      * general.csv
+      * authors.csv
+      * commits.csv
+      * activity_month_of_year.csv
+      * total_history.csv
+    * ...
+  * ...
 
-**html**: this value is the default. Generate and show the statistics in html format. This is useful for human usage.
-#### project_name
-This param is only used in csv export.  
-Repo's project name. A complex project has frontend repo, backend repo, DB repo...etc.  
-When export the repo statistic you can group the details with this field.   
+*This tool is currently not maintained and might not be working at all.*
 
-## export_repos Usage
-export_repos.py is a tool script to export well structured git repos.  
-Requiered folder structure:  
-
-* root  
-  * project1  
-    * GitRepo  
-    * GitRepo1  
-    * GitRepon  
-  * project2  
-    * p2repo1  
-    * p2repo2  
-
+**Usage**
 ```bash
-python export_repos.py [root-folder] [output-folder]
+export_repos [--help] [--pull_repos] [--append_csv] 
+             project_folder output_folder
 ```
-
-### Args
-#### root-folder
-root folder location. This folder contain the project folders, and the project folder contain the project repositories.
-
-#### output-folder
-The script create same folder structure in the output folder as root-folder.  
-The repos folders will contain the csv export files.
-
-* root  
-  * project1  
-    * GitRepo  
-      * general.csv
-      * authors.csv
-      * commits.csv
-      * activity_month_of_year.csv
-    * GitRepo1  
-      * general.csv
-      * authors.csv
-      * commits.csv
-      * activity_month_of_year.csv
-    * GitRepon  
-      * general.csv
-      * authors.csv
-      * commits.csv
-      * activity_month_of_year.csv
-  * projet2  
-    * p2repo1  
-      * general.csv
-      * authors.csv
-      * commits.csv
-      * activity_month_of_year.csv
-    * p2repo2  
-      * general.csv
-      * authors.csv
-      * commits.csv
-      * activity_month_of_year.csv
+See "--help" for parameters description.

@@ -1,4 +1,3 @@
-
 import os
 import datetime
 import calendar
@@ -7,24 +6,22 @@ import itertools
 import time
 import collections
 import glob
-import json
-
+import warnings
 from jinja2 import Environment, FileSystemLoader
-from tools.datacollector import GitDataCollector
-from tools.gitstatistics import GitStatistics
-from tools import get_pipe_output
-from tools import Configuration
-
+from analysis.datacollector import GitDataCollector
+from analysis.gitstatistics import GitStatistics
+from tools.shellhelper import get_pipe_output
+from tools.configuration import Configuration
 
 def getkeyssortedbyvalues(a_dict):
     return [el[1] for el in sorted([(el[1], el[0]) for el in a_dict.items()])]
+
 
 class HTMLReportCreator(object):
     data: GitDataCollector = None
     configuration: Configuration = None
     conf: dict = None
     recent_activity_period_weeks = 32
-    repostat_root_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..')
 
     def __init__(self, config: Configuration, repo_stat):
         self.data = None
@@ -35,21 +32,13 @@ class HTMLReportCreator(object):
 
         self.git_repo_statistics = repo_stat
 
-        templates_dir = os.path.join(self.repostat_root_dir, 'templates')
+        templates_dir = os.path.join(self.configuration.repostat_root_dir, 'templates')
         self.j2_env = Environment(loader=FileSystemLoader(templates_dir), trim_blocks=True)
         self.j2_env.filters['to_month_name_abr'] = lambda im: calendar.month_abbr[im]
         self.j2_env.filters['to_weekday_name'] = lambda i: calendar.day_name[i]
-        self.j2_env.filters['to_ratio'] = lambda val, max_val: float(val) / max_val
-        self.j2_env.filters['to_percentage'] = lambda val, max_val: 100 * float(val) / max_val
+        self.j2_env.filters['to_ratio'] = lambda val, max_val: (float(val) / max_val) if max_val != 0 else 0
+        self.j2_env.filters['to_percentage'] = lambda val, max_val: (100 * float(val) / max_val) if max_val != 0 else 0
         self.j2_env.filters['to_intensity'] = lambda val, max_val: 127 + int((float(val) / max_val) * 128)
-
-        self.release_data = self._read_release_data()
-
-    def _read_release_data(self):
-        RELEASE_DATA_FILE = os.path.join(self.repostat_root_dir, 'git_hooks', 'release_data.json')
-        with open(RELEASE_DATA_FILE) as release_json_file:
-            release_data = json.load(release_json_file)
-            return release_data
 
     def _save_recent_activity_data(self):
         # generate weeks to show (previous N weeks from now)
@@ -70,17 +59,18 @@ class HTMLReportCreator(object):
         self.path = path
         self.title = data.projectname
 
-        # copy static files. Looks in the binary directory, ../share/gitstats and /usr/share/gitstats
-        secondarypath = os.path.join(self.repostat_root_dir, '..', 'share', 'gitstats')
-        basedirs = [self.repostat_root_dir, secondarypath, '/usr/share/gitstats']
-        for asset in ('gitstats.css', 'sortable.js', 'arrow-up.gif', 'arrow-down.gif', 'arrow-none.gif'):
-            for base in basedirs:
-                src = os.path.join(base, asset)
-                if os.path.exists(src):
-                    shutil.copyfile(src, os.path.join(path, asset))
-                    break
+        # copy static files
+        for asset in ('gitrepostat.css', 'sortable.js', 'arrow-up.gif', 'arrow-down.gif', 'arrow-none.gif'):
+            src = os.path.join(self.configuration.repostat_root_dir, "assets")
+            if asset.endswith(".gif"):
+                src = os.path.join(src, "images", asset)
             else:
-                print('Warning: "%s" not found, so not copied (searched: %s)' % (asset, basedirs))
+                src = os.path.join(src, asset)
+            dst = os.path.join(path, asset)
+            if os.path.exists(src):
+                shutil.copyfile(src, dst)
+            else:
+                warnings.warn('"%s" not found while searched in %s and, hence, not copied' % (asset, src))
 
         ###
         # General
@@ -120,17 +110,18 @@ class HTMLReportCreator(object):
         # lines_by_authors allows us to generate all the
         # points in the .dat file.
         lines_by_authors = {}
+        lines_by_other_authors = {}
 
         # Don't rely on getAuthors to give the same order each
         # time. Be robust and keep the list in a variable.
         commits_by_authors = {}
+        commits_by_other_authors = {}
 
-        others_column_name = 'others'
         authors_to_plot = data.get_authors(self.conf['max_authors'])
         with open(os.path.join(path, 'lines_of_code_by_author.dat'), 'w') as fgl, \
                 open(os.path.join(path, 'commits_by_author.dat'), 'w') as fgc:
             header_row = '"timestamp" ' + ' '.join('"{0}"'.format(w) for w in authors_to_plot) + ' ' \
-                         + others_column_name + '\n'
+                         + '"others"' + '\n'
             fgl.write(header_row)
             fgc.write(header_row)
             for stamp in sorted(data.changes_by_date_by_author.keys()):
@@ -142,16 +133,14 @@ class HTMLReportCreator(object):
                         commits_by_authors[author] = data.changes_by_date_by_author[stamp][author]['commits']
                     fgl.write(' %d' % lines_by_authors.get(author, 0))
                     fgc.write(' %d' % commits_by_authors.get(author, 0))
-                for author in data.changes_by_date_by_author[stamp].keys():
-                    if author not in authors_to_plot:
-                        lines_by_authors[others_column_name] = lines_by_authors.get(others_column_name, 0) \
-                                                               + data.changes_by_date_by_author[stamp][author][
-                                                                   'lines_added']
-                        commits_by_authors[others_column_name] = commits_by_authors.get(others_column_name, 0) \
-                                                                 + data.changes_by_date_by_author[stamp][author][
-                                                                     'commits']
-                fgl.write(' %d' % lines_by_authors.get(others_column_name, 0))
-                fgc.write(' %d' % commits_by_authors.get(others_column_name, 0))
+
+                if len(data.get_authors()) > self.conf['max_authors']:
+                    for author in data.changes_by_date_by_author[stamp].keys():
+                        if author not in authors_to_plot:
+                            lines_by_other_authors[author] = data.changes_by_date_by_author[stamp][author]['lines_added']
+                            commits_by_other_authors[author] = data.changes_by_date_by_author[stamp][author]['commits']
+                    fgl.write(' %d' % sum(lines for lines in lines_by_other_authors.values()))
+                    fgc.write(' %d' % sum(commits for commits in commits_by_other_authors.values()))
                 fgl.write('\n')
                 fgc.write('\n')
 
@@ -190,7 +179,7 @@ class HTMLReportCreator(object):
             f.write(about_html.decode('utf-8'))
 
         print('Generating graphs...')
-        self.process_gnuplot_scripts(scripts_path=os.path.join(self.repostat_root_dir, 'gnuplot'),
+        self.process_gnuplot_scripts(scripts_path=os.path.join(self.configuration.repostat_root_dir, 'gnuplot'),
                                      data_path=path,
                                      output_images_path=path)
 
@@ -372,7 +361,7 @@ class HTMLReportCreator(object):
             'tags': []
         }
 
-        # TODO: fix error occuring when a tag name and project name are the same
+        # TODO: fix error occurring when a tag name and project name are the same
         """
         fatal: ambiguous argument 'gitstats': both revision and filename
         Use '--' to separate paths from revisions, like this:
@@ -406,11 +395,11 @@ class HTMLReportCreator(object):
     def render_about_page(self):
         page_data = {
             "url": "https://github.com/vifactor/repostat",
-            "version": self.release_data['user_version'],
+            "version": self.configuration.get_release_data_info()['user_version'],
             "tools": [GitStatistics.get_fetching_tool_info(),
                       self.configuration.get_jinja_version(),
-                      self.configuration.get_gnuplot_version()],
-            "contributors": [author for author in self.release_data['contributors']]
+                      'gnuplot ' + self.configuration.get_gnuplot_version()],
+            "contributors": [author for author in self.configuration.get_release_data_info()['contributors']]
         }
 
         template_rendered = self.j2_env.get_template('about.html').render(

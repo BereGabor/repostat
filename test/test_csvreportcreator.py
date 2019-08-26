@@ -1,9 +1,9 @@
 import unittest
 import shutil
 import os
-from tools.csvreportcreator import DictionaryListCsvExporter
-from tools.csvreportcreator import DictionaryCsvExporter
-from tools.gitstatistics import GitStatistics
+from analysis.csvreportcreator import DictionaryListCsvExporter
+from analysis.csvreportcreator import DictionaryCsvExporter
+from analysis.gitstatistics import GitStatistics
 
 
 class BasicTestExporter(unittest.TestCase):
@@ -28,7 +28,7 @@ class TestDictionaryListCsvExporte(BasicTestExporter):
         exporter = DictionaryListCsvExporter()
         file_name = os.path.join(self.csv_outputdir, 'authors.csv')
         additional = {'projectname': 'Project Name Unit test', 'reponame': 'repostat'}
-        exporter.export(file_name, self.gs.authors, additional)
+        exporter.export(file_name, self.gs.authors, False, additional)
         self.assertTrue(os.path.isfile(file_name))
         # Pekka Enberg an old contributor with one commit. These test data maybe will not change in the future
         self.assertTrue('Pekka Enberg;1;1;' in open(file_name, encoding='utf-8').read())
@@ -38,9 +38,31 @@ class TestDictionaryListCsvExporte(BasicTestExporter):
         exporter = DictionaryListCsvExporter()
         file_name = os.path.join(self.csv_outputdir, 'commits.csv')
         additional = {'projectname': 'Project Name Unit test', 'reponame': 'repostat'}
+
         exporter.export(file_name, self.gs.commits, additional)
+
         self.assertTrue(os.path.isfile(file_name))
         self.assertTrue('Viktor Kopp;8;5;2018-10-15' in open(file_name, encoding='utf-8').read())
+
+    def testAuthorDictExportAppend(self):
+        # test with dict
+        exporter = DictionaryListCsvExporter()
+        file_name = os.path.join(self.csv_outputdir, 'authors.csv')
+        exporter.export(file_name, self.gs.authors, False)
+        statinfo_before = os.stat(file_name)
+        exporter.export(file_name, self.gs.authors, True)
+        statinfo_after = os.stat(file_name)
+        self.assertTrue(statinfo_after.st_size > statinfo_before.st_size)
+
+    def testAuthorDictExportAppendFalse(self):
+        # test with dict
+        exporter = DictionaryListCsvExporter()
+        file_name = os.path.join(self.csv_outputdir, 'authors.csv')
+        exporter.export(file_name, self.gs.authors, False)
+        statinfo_before = os.stat(file_name)
+        exporter.export(file_name, self.gs.authors, False)
+        statinfo_after = os.stat(file_name)
+        self.assertTrue(statinfo_after.st_size == statinfo_before.st_size)
 
 
 class TestGeneralDictionaryCsvExporter(BasicTestExporter):
@@ -68,8 +90,8 @@ class TestGeneralDictionaryCsvExporter(BasicTestExporter):
         self.assertTrue(
             'projectname;reponame;special-chars-hu;special-chars-de;key' in open(file_name, encoding='utf-8').read())
         self.assertTrue(
-            'Project Name Unit test;repostat;árvíztűrőtükörfúrógépÁRVÍZTŰRŐTÜKÖRFÚRÓGÉP;ẞÄÖÜäöüß;0' in open(file_name,
-                                                                                                            encoding='utf-8').read())
+            'Project Name Unit test;repostat;árvíztűrőtükörfúrógépÁRVÍZTŰRŐTÜKÖRFÚRÓGÉP;ẞÄÖÜäöüß;0' in
+            open(file_name, encoding='utf-8').read())
 
     def testGeneralDictionaryCsvExporterWithKeyUnit(self):
         exporter = DictionaryCsvExporter()
@@ -77,7 +99,33 @@ class TestGeneralDictionaryCsvExporter(BasicTestExporter):
         test_data = {}
         for i in range(0, 10):
             test_data[i] = {'projectname': 'Project Name Unit test', 'reponame': 'repostat'}
-        exporter.export(file_name, test_data, True, 'Key UnitTestField')
+        exporter.export(file_name, test_data, False, True, 'Key UnitTestField')
         self.assertTrue(os.path.isfile(file_name))
         self.assertTrue('projectname;reponame;Key UnitTestField' in open(file_name, encoding='utf-8').read())
         self.assertTrue('Project Name Unit test;repostat;0' in open(file_name, encoding='utf-8').read())
+
+    def testGeneralDictionaryCsvExporterAppend(self):
+        exporter = DictionaryCsvExporter()
+        file_name = os.path.join(self.csv_outputdir, 'general_dict_export_append.csv')
+        test_data = {}
+        for i in range(0, 10):
+            test_data[i] = {'projectname': 'Project Name Unit test', 'reponame': 'repostat'}
+        exporter.export(file_name, test_data, False)
+        exporter.export(file_name, self.gs.authors, False)
+        statinfo_before = os.stat(file_name)
+        exporter.export(file_name, self.gs.authors, True)
+        statinfo_after = os.stat(file_name)
+        self.assertTrue(statinfo_after.st_size > statinfo_before.st_size)
+
+    def testGeneralDictionaryCsvExporterAppendFalse(self):
+        exporter = DictionaryCsvExporter()
+        file_name = os.path.join(self.csv_outputdir, 'general_dict_export_appendfalse.csv')
+        test_data = {}
+        for i in range(0, 10):
+            test_data[i] = {'projectname': 'Project Name Unit test', 'reponame': 'repostat'}
+        exporter.export(file_name, test_data, False)
+        exporter.export(file_name, self.gs.authors, False)
+        statinfo_before = os.stat(file_name)
+        exporter.export(file_name, self.gs.authors, False)
+        statinfo_after = os.stat(file_name)
+        self.assertTrue(statinfo_after.st_size == statinfo_before.st_size)
