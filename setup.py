@@ -5,11 +5,19 @@ from tools.configuration import Configuration
 setup(name='repo_stat',
       version=Configuration.get_release_data_info()['develop_version'],
       description='Desktop git repository analyser and report creator.',
-      keywords='git analisys statistics',
+      keywords='git analysis statistics vcs python',
       url='https://github.com/vifactor/repostat',
       author='Viktor Kopp',
-      author_email='vifactor(at)gmail.com',
-      license='GPLv3',
+      author_email='vifactor@gmail.com',
+      license='GPLv2',
+      classifiers=[
+          "Development Status :: 4 - Beta",
+          "Environment :: Console",
+          "Intended Audience :: Developers",
+          "License :: OSI Approved :: GNU General Public License v2 or later (GPLv2+)",
+          "Topic :: Software Development :: Version Control",
+          "Topic :: Utilities"
+      ],
       packages=['analysis', 'tools'],
       install_requires=[
           'cffi==1.11.5',
@@ -19,9 +27,8 @@ setup(name='repo_stat',
           'pytz==2018.5',
           'six>=1.11.0'
       ],
-      # FIXME: commented out due to dpkg failure due to impossibility to download "nose" from pypi
-      #      test_suite='nose.collector',
-      #      tests_require=['nose'],
-      scripts=['gitstats.py', 'export_repos.py'],
+      test_suite='nose.collector',
+      tests_require=['nose'],
+      entry_points={"console_scripts": ["repostat = analysis.repostat:main"]},
       include_package_data=True,
       zip_safe=False)
